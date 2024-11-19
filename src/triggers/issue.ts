@@ -58,61 +58,67 @@ interface TeamIssuesResponse {
   };
 }
 
-const buildIssueList = (orderBy: "createdAt" | "updatedAt") => async (z: ZObject, bundle: Bundle) => {
-  if (!bundle.inputData.team_id) {
-    throw new z.errors.HaltedError(`Please select the team first`);
-  }
+const getIssues =
+  (orderBy: "createdAt" | "updatedAt", titlePrefix = "") =>
+  async (z: ZObject, bundle: Bundle) => {
+    if (!bundle.inputData.team_id) {
+      throw new z.errors.HaltedError(`Please select the team first`);
+    }
 
-  const cursor = bundle.meta.page ? await z.cursor.get() : undefined;
+    const cursor = bundle.meta.page ? await z.cursor.get() : undefined;
 
-  const variables = omitBy(
-    {
-      after: cursor,
-      teamId: bundle.inputData.team_id,
-      statusId: bundle.inputData.status_id,
-      creatorId: bundle.inputData.creator_id,
-      assigneeId: bundle.inputData.assignee_id,
-      priority: (bundle.inputData.priority && Number(bundle.inputData.priority)) || undefined,
-      labelId: bundle.inputData.label_id,
-      projectId: bundle.inputData.project_id,
-      projectMilestoneId: bundle.inputData.project_milestone_id,
-      orderBy,
-    },
-    (v) => v === undefined
-  );
+    const variables = omitBy(
+      {
+        after: cursor,
+        teamId: bundle.inputData.team_id,
+        statusId: bundle.inputData.status_id,
+        creatorId: bundle.inputData.creator_id,
+        assigneeId: bundle.inputData.assignee_id,
+        priority: (bundle.inputData.priority && Number(bundle.inputData.priority)) || undefined,
+        labelId: bundle.inputData.label_id,
+        projectId: bundle.inputData.project_id,
+        projectMilestoneId: bundle.inputData.project_milestone_id,
+        titlePrefix,
+        orderBy,
+      },
+      (v) => v === undefined
+    );
 
-  const filters = [];
-  if ("priority" in variables) {
-    filters.push(`priority: { eq: $priority }`);
-  }
-  if ("statusId" in variables) {
-    filters.push(`state: { id: { eq: $statusId } }`);
-  }
-  if ("creatorId" in variables) {
-    filters.push(`creator: { id: { eq: $creatorId } }`);
-  }
-  if ("assigneeId" in variables) {
-    filters.push(`assignee: { id: { eq: $assigneeId } }`);
-  }
-  if ("labelId" in variables) {
-    filters.push(`labels: { id: { eq: $labelId } }`);
-  }
-  if ("projectId" in variables) {
-    filters.push(`project: { id: { eq: $projectId } }`);
-  }
-  if ("projectMilestoneId" in variables) {
-    filters.push(`projectMilestone: { id: { eq: $projectMilestoneId } }`);
-  }
+    const filters = [];
+    if ("priority" in variables) {
+      filters.push(`priority: { eq: $priority }`);
+    }
+    if ("statusId" in variables) {
+      filters.push(`state: { id: { eq: $statusId } }`);
+    }
+    if ("creatorId" in variables) {
+      filters.push(`creator: { id: { eq: $creatorId } }`);
+    }
+    if ("assigneeId" in variables) {
+      filters.push(`assignee: { id: { eq: $assigneeId } }`);
+    }
+    if ("labelId" in variables) {
+      filters.push(`labels: { id: { eq: $labelId } }`);
+    }
+    if ("projectId" in variables) {
+      filters.push(`project: { id: { eq: $projectId } }`);
+    }
+    if ("projectMilestoneId" in variables) {
+      filters.push(`projectMilestone: { id: { eq: $projectMilestoneId } }`);
+    }
+    if ("titlePrefix" in variables) {
+      filters.push(`title: { startsWith: $titlePrefix }`);
+    }
 
-  const response = await z.request({
-    url: "https://api.linear.app/graphql",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      authorization: bundle.authData.api_key,
-    },
-    body: {
-      query: `
+    const response = await z.request({
+      url: "https://api.linear.app/graphql",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        authorization: bundle.authData.api_key,
+      },
+      body: {
+        query: `
       query ZapierListIssues(
         $after: String
         $teamId: String!
@@ -123,6 +129,7 @@ const buildIssueList = (orderBy: "createdAt" | "updatedAt") => async (z: ZObject
         ${"labelId" in variables ? "$labelId: ID" : ""}
         ${"projectId" in variables ? "$projectId: ID" : ""}
         ${"projectMilestoneId" in variables ? "$projectMilestoneId: ID" : ""}
+        ${"titlePrefix" in variables ? "$titlePrefix: String" : ""}
         $orderBy: PaginationOrderBy!
       ) {
         team(id: $teamId) {
@@ -190,24 +197,42 @@ const buildIssueList = (orderBy: "createdAt" | "updatedAt") => async (z: ZObject
         }
       }
       `,
-      variables,
-    },
-    method: "POST",
-  });
+        variables,
+      },
+      method: "POST",
+    });
 
-  const data = (response.json as TeamIssuesResponse).data;
-  const issues = data.team.issues.nodes;
+    const data = (response.json as TeamIssuesResponse).data;
+    const issues = data.team.issues.nodes;
 
-  // Set cursor for pagination
-  if (data.team.issues.pageInfo.hasNextPage) {
-    await z.cursor.set(data.team.issues.pageInfo.endCursor);
-  }
+    // Set cursor for pagination
+    if (data.team.issues.pageInfo.hasNextPage) {
+      await z.cursor.set(data.team.issues.pageInfo.endCursor);
+    }
+
+    return issues;
+  };
+
+const buildIssueList = (orderBy: "createdAt" | "updatedAt") => async (z: ZObject, bundle: Bundle) => {
+  const issues = await getIssues(orderBy)(z, bundle);
 
   return issues.map((issue) => ({
     ...issue,
     id: `${issue.id}-${issue[orderBy]}`,
     issueId: issue.id,
   }));
+};
+
+const buildIssueListWithZohoDeskTicketId = () => async (z: ZObject, bundle: Bundle) => {
+  const issues = await getIssues("updatedAt", "#")(z, bundle);
+
+  return issues
+    .filter((issue) => /^#\d+/.test(issue.title))
+    .map((issue) => ({
+      ...issue,
+      id: `${issue.id}-${issue.updatedAt}`,
+      issueId: issue.id,
+    }));
 };
 
 const issue = {
@@ -315,6 +340,20 @@ export const updatedIssue = {
   operation: {
     ...issue.operation,
     perform: buildIssueList("updatedAt"),
+    canPaginate: true,
+  },
+};
+
+export const updatedIssueWithZohoDeskTicketId = {
+  ...issue,
+  key: "updatedIssueWithZohoDeskTicketId",
+  display: {
+    label: "Updated Issue With Zoho Desk Ticket ID",
+    description: "Triggers when an issue with a Zoho Desk ticket ID is updated.",
+  },
+  operation: {
+    ...issue.operation,
+    perform: buildIssueListWithZohoDeskTicketId(),
     canPaginate: true,
   },
 };

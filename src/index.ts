@@ -1,9 +1,9 @@
 import { addBearerHeader, authentication } from "./authentication";
 import { createIssue } from "./creates/createIssue";
-import { newIssueComment } from "./triggers/commentIssue";
+import { newIssueComment, newIssueCommentWithZohoDeskTicketId } from "./triggers/commentIssue";
 import { newProjectUpdateComment } from "./triggers/commentProjectUpdate";
 import { newDocumentComment } from "./triggers/commentDocument";
-import { newIssue, updatedIssue } from "./triggers/issue";
+import { newIssue, updatedIssue, updatedIssueWithZohoDeskTicketId } from "./triggers/issue";
 import { team } from "./triggers/team";
 import { status } from "./triggers/status";
 import { label } from "./triggers/label";
@@ -63,8 +63,10 @@ const App = {
     [newIssueInstant.key]: newIssueInstant,
     [updatedIssue.key]: updatedIssue,
     [updatedIssueInstant.key]: updatedIssueInstant,
+    [updatedIssueWithZohoDeskTicketId.key]: updatedIssueWithZohoDeskTicketId,
     [newIssueComment.key]: newIssueComment,
     [newIssueCommentInstant.key]: newIssueCommentInstant,
+    [newIssueCommentWithZohoDeskTicketId.key]: newIssueCommentWithZohoDeskTicketId,
     [newProjectUpdate.key]: newProjectUpdate,
     [newProjectUpdateInstant.key]: newProjectUpdateInstant,
     [newProjectUpdateComment.key]: newProjectUpdateComment,
