@@ -15,6 +15,7 @@ interface ProjectCommon {
   url: string;
   name: string;
   description: string;
+  content: string;
   priority: number;
   createdAt: Date;
   updatedAt: Date;
@@ -27,7 +28,7 @@ interface ProjectCommon {
   };
 }
 
-interface ProjectApi extends ProjectCommon {
+export interface ProjectApi extends ProjectCommon {
   teams: {
     nodes: IdAndName[];
   };
@@ -120,6 +121,7 @@ const getProjectList =
             url: true,
             name: true,
             description: true,
+            content: true,
             priority: true,
             createdAt: true,
             updatedAt: true,
